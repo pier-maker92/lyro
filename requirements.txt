@@ -3,5 +3,9 @@ pillow
 chromadb 
 torch==2.8.0 
 transformers==5.0.0
+<<<<<<< HEAD
 sentence-transformers["video"]
 sentence-transformers["image"]
+=======
+sentence-transformers[video]
+>>>>>>> 3bfbcc2 (feat: implement deduplication and path normalization in lyrics embedding pipeline)

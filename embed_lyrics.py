@@ -24,7 +24,7 @@ def read_concatenated_json(filepath):
 def main():
     parser = argparse.ArgumentParser(description="Embed lyrics into ChromaDB.")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for embedding processing")
-    parser.add_argument("--input_file", type=str, default="/Users/software/lyra/lyrics_dataset.jsonl", help="Path to the JSON/JSONL dataset file")
+    parser.add_argument("--input_file", type=str, default="/workspace/lyra/lyrics_dataset.jsonl", help="Path to the JSON/JSONL dataset file")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -47,6 +47,7 @@ def main():
     all_documents = []
 
     # First pass: collect everything into memory
+    seen_track_ids = set()
     for i, track_data in enumerate(tqdm(read_concatenated_json(args.input_file), desc="Reading dataset")):
         try:
             artist_name = track_data.get("artist_name", "")
@@ -67,6 +68,9 @@ def main():
                 continue
                 
             track_id = str(track_data.get("track_id", f"unknown_{i}"))
+            if track_id in seen_track_ids:
+                continue
+            seen_track_ids.add(track_id)
             
             # Split lyrics by double newlines (\n\n)
             stanzas = [s.strip() for s in lyrics_txt.split('\n\n') if s.strip()]
