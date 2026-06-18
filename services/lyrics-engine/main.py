@@ -1,11 +1,13 @@
 """Visual-to-Lyrics retrieval engine.
 
-FastAPI service that embeds an uploaded image (conditioned on each mood prompt)
-with OpenRouter, queries a local ChromaDB catalog of song lyrics, and returns the
-top unique matches per mood.
+FastAPI service that embeds an uploaded image (mood-agnostic) with OpenRouter,
+queries a local ChromaDB catalog of song lyrics for the top candidates, then
+clusters those candidates into the 5 moods by cosine similarity between each
+retrieved lyric embedding and the precomputed embedding of each mood.
 """
 
 import asyncio
+import math
 import os
 
 import chromadb
@@ -14,16 +16,21 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from embeddings import embed_visual_frames
-from moods import MOODS, get_query_prompt
+from embeddings import embed_text_async, embed_visual_frames
+from moods import DEFAULT_QUERY_PROMPT, MOOD_TEXTS, MOODS
 from musixmatch import MusixmatchError, fetch_track
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lyrics_catalog_db")
 COLLECTION_NAME = "song_lyrics_min"
-TOP_K = 15
+# Number of mood-agnostic candidates pulled from Chroma before clustering.
+CANDIDATE_K = 25
 RESULTS_PER_MOOD = 5
 MAX_FRAMES = 8
 EMBED_CONCURRENCY = 6
+
+# The 5 mood embeddings are identical across requests, so compute them once.
+_mood_embeddings: dict[str, list[float]] | None = None
+_mood_lock = asyncio.Lock()
 
 app = FastAPI(title="Lyrics Engine")
 app.add_middleware(
@@ -91,24 +98,35 @@ def _parse_embedding_id(embedding_id: str) -> tuple[str, int]:
     return track_id, stanza_index
 
 
-def _dedupe_ids(query_result) -> list[tuple[str, int, float]]:
-    """Pick up to RESULTS_PER_MOOD unique tracks from a Chroma query result.
+def _cosine(a, b) -> float:
+    """Cosine similarity between two equal-length embedding vectors."""
+    dot = 0.0
+    na = 0.0
+    nb = 0.0
+    for x, y in zip(a, b):
+        x = float(x)
+        y = float(y)
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
 
-    Returns ``(track_id, stanza_index, distance)`` tuples in ranked order.
-    """
-    ids = (query_result.get("ids") or [[]])[0]
-    distances = (query_result.get("distances") or [[]])[0]
-    seen: set[str] = set()
-    picks: list[tuple[str, int, float]] = []
-    for embedding_id, dist in zip(ids, distances):
-        track_id, stanza_index = _parse_embedding_id(str(embedding_id))
-        if track_id in seen:
-            continue
-        seen.add(track_id)
-        picks.append((track_id, stanza_index, float(dist)))
-        if len(picks) >= RESULTS_PER_MOOD:
-            break
-    return picks
+
+async def _get_mood_embeddings(client: httpx.AsyncClient) -> dict[str, list[float]]:
+    """Embed the 5 mood descriptions once and cache them for later requests."""
+    global _mood_embeddings
+    if _mood_embeddings is not None:
+        return _mood_embeddings
+    async with _mood_lock:
+        if _mood_embeddings is not None:
+            return _mood_embeddings
+        vectors = await asyncio.gather(
+            *[embed_text_async(client, MOOD_TEXTS[mood]) for mood in MOODS]
+        )
+        _mood_embeddings = dict(zip(MOODS, vectors))
+    return _mood_embeddings
 
 
 def _stanza_at(lyrics: str, index: int) -> str:
@@ -146,13 +164,10 @@ async def analyze(req: AnalyzeRequest) -> dict[str, list[LyricMatch]]:
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
-            vectors = await asyncio.gather(
-                *[
-                    embed_visual_frames(
-                        client, get_query_prompt(mood), frames, semaphore
-                    )
-                    for mood in MOODS
-                ]
+            # One mood-agnostic visual query vector + the cached mood embeddings.
+            query_vector, mood_vectors = await asyncio.gather(
+                embed_visual_frames(client, DEFAULT_QUERY_PROMPT, frames, semaphore),
+                _get_mood_embeddings(client),
             )
         except httpx.HTTPStatusError as exc:
             raise HTTPException(
@@ -160,18 +175,49 @@ async def analyze(req: AnalyzeRequest) -> dict[str, list[LyricMatch]]:
                 detail=f"Embedding provider error: {exc.response.status_code}",
             ) from exc
 
-        # Rank + dedupe each mood, then resolve every unique track once via Musixmatch.
-        per_mood_picks: dict[str, list[tuple[str, int, float]]] = {}
-        for mood, vector in zip(MOODS, vectors):
-            result = collection.query(
-                query_embeddings=[vector],
-                n_results=TOP_K,
-                include=["distances"],
+        # Pull the top mood-agnostic candidates, keeping their embeddings so we can
+        # cluster them by similarity to each mood.
+        result = collection.query(
+            query_embeddings=[query_vector],
+            n_results=CANDIDATE_K,
+            include=["distances", "embeddings"],
+        )
+        ids = (result.get("ids") or [[]])[0]
+        distances = (result.get("distances") or [[]])[0]
+        embeddings = (result.get("embeddings") or [[]])[0]
+
+        # Cluster each unique candidate track into the mood it is closest to.
+        per_mood_picks: dict[str, list[tuple[str, int, float, float]]] = {
+            mood: [] for mood in MOODS
+        }
+        seen_tracks: set[str] = set()
+        for embedding_id, dist, emb in zip(ids, distances, embeddings):
+            track_id, stanza_index = _parse_embedding_id(str(embedding_id))
+            if track_id in seen_tracks:
+                continue
+            seen_tracks.add(track_id)
+            best_mood = MOODS[0]
+            best_sim = -2.0
+            for mood in MOODS:
+                sim = _cosine(emb, mood_vectors[mood])
+                if sim > best_sim:
+                    best_sim = sim
+                    best_mood = mood
+            per_mood_picks[best_mood].append(
+                (track_id, stanza_index, float(dist), best_sim)
             )
-            per_mood_picks[mood] = _dedupe_ids(result)
+
+        # Most on-mood first within each cluster, capped per mood.
+        for mood in MOODS:
+            per_mood_picks[mood].sort(key=lambda t: t[3], reverse=True)
+            per_mood_picks[mood] = per_mood_picks[mood][:RESULTS_PER_MOOD]
 
         needed = list(
-            {track_id for picks in per_mood_picks.values() for track_id, _, _ in picks}
+            {
+                track_id
+                for picks in per_mood_picks.values()
+                for track_id, _, _, _ in picks
+            }
         )
         try:
             fetched = await asyncio.gather(
@@ -190,7 +236,7 @@ async def analyze(req: AnalyzeRequest) -> dict[str, list[LyricMatch]]:
     response: dict[str, list[LyricMatch]] = {}
     for mood, picks in per_mood_picks.items():
         matches: list[LyricMatch] = []
-        for track_id, stanza_index, distance in picks:
+        for track_id, stanza_index, distance, _sim in picks:
             data = tracks[track_id]
             matches.append(
                 LyricMatch(

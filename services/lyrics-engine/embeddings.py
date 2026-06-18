@@ -47,6 +47,26 @@ def embed_text(text: str) -> list[float]:
         return _extract(resp.json())
 
 
+async def embed_text_async(
+    client: httpx.AsyncClient,
+    text: str,
+    semaphore: asyncio.Semaphore | None = None,
+) -> list[float]:
+    """Async text-only embedding (used to embed the 5 mood descriptions)."""
+    body = {
+        "model": EMBED_MODEL,
+        "input": [{"content": [{"type": "text", "text": text}]}],
+        "encoding_format": "float",
+    }
+    if semaphore is not None:
+        async with semaphore:
+            resp = await client.post(OPENROUTER_URL, headers=_headers(), json=body)
+    else:
+        resp = await client.post(OPENROUTER_URL, headers=_headers(), json=body)
+    resp.raise_for_status()
+    return _extract(resp.json())
+
+
 async def embed_visual_query(
     client: httpx.AsyncClient,
     prompt: str,

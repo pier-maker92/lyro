@@ -13,6 +13,17 @@ MOOD_QUERY_PROMPTS = {
 }
 
 
+# Short descriptions used to embed each mood into the catalog's vector space.
+# The retrieved lyric embeddings are clustered by cosine similarity to these.
+MOOD_TEXTS = {
+    "love": "Romantic love lyrics: longing, devotion, intimacy, tenderness, passion, and heartfelt emotion.",
+    "adventure": "Adventurous lyrics: exploration, freedom, epic journeys, bold action, and triumphant energy.",
+    "funny": "Humorous lyrics: wit, absurdity, playful irony, comedy, and lighthearted fun.",
+    "chill": "Relaxed lyrics: calm, ease, reflection, gentle warmth, and a peaceful atmosphere.",
+    "party": "Celebratory party lyrics: high energy, dancing, excitement, nightlife, and hype.",
+}
+
+
 def get_query_prompt(mood: str | None) -> str:
     if not mood:
         return DEFAULT_QUERY_PROMPT

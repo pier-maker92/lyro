@@ -70,3 +70,17 @@ playsInline>` via React.createElement("video"), setting `el.muted = true` /
 `el.defaultMuted = true` in the ref BEFORE calling `el.play()`. Keep expo-video
 only for native (iOS/Android), where it still needs the `"use no memo"` directive
 to survive the React Compiler.
+
+## Mood logic: mood-agnostic retrieval + cosine clustering
+
+The engine does NOT query Chroma per mood. It embeds the frames once with a
+neutral prompt (DEFAULT_QUERY_PROMPT), pulls the top CANDIDATE_K (25) candidates
+WITH their embeddings (include=["distances","embeddings"]), then assigns each
+unique track to the mood whose precomputed text embedding (moods.MOOD_TEXTS,
+cached in _mood_embeddings) has the highest cosine similarity. Per-mood lists are
+sorted by that similarity and capped at RESULTS_PER_MOOD.
+
+**Consequence:** the 5 buckets are NOT balanced — a scene that leans one way can
+leave some moods empty (the UI already handles empty moods). This is expected, not
+a bug. To rebalance you would change the clustering (e.g. top-N per mood) rather
+than the retrieval.
