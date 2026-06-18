@@ -1,6 +1,15 @@
 MOODS = ["love", "adventure", "funny", "chill", "party"]
 
-DEFAULT_QUERY_PROMPT = "Retrieve song lyrics that visually match this scene."
+DEFAULT_QUERY_PROMPT = (
+    "Retrieve song lyrics that match this visual scene, "
+    "considering both visual imagery and emotional mood."
+)
+
+DOCUMENT_PROMPT = (
+    "Represent song lyrics for retrieving matching visual scenes or videos. "
+    "Capture the emotional mood, tone, and thematic imagery, including romantic, "
+    "adventurous, humorous, relaxed, and celebratory qualities."
+)
 
 MOOD_QUERY_PROMPTS = {
     "love": (
@@ -39,3 +48,11 @@ def get_query_prompt(mood: str | None) -> str:
         key,
         f"Retrieve song lyrics that match this visual scene with a {mood} emotional tone.",
     )
+
+
+def format_document(text: str) -> str:
+    return f"{DOCUMENT_PROMPT}\n{text}"
+
+
+def format_query(user_text: str, mood: str | None = None) -> str:
+    return f"{get_query_prompt(mood)}\n{user_text}"

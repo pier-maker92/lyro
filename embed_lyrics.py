@@ -1,9 +1,9 @@
 import argparse
 import json
 import chromadb
-import torch
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+
+from embedding import encode_documents, get_device, load_model
 
 
 def read_concatenated_json(filepath):
@@ -36,16 +36,9 @@ def main():
     )
     args = parser.parse_args()
 
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps" if torch.backends.mps.is_available() else "cpu"
-    )
+    device = get_device()
     print(f"Loading SentenceTransformer model on {device}...")
-    # Load the multimodal embedding model as requested
-    model = SentenceTransformer(
-        "Qwen/Qwen3-VL-Embedding-2B", trust_remote_code=True, device=device
-    )
+    model = load_model(device)
 
     print("Initializing ChromaDB...")
     client = chromadb.PersistentClient(path="./lyrics_catalog_db")
@@ -55,7 +48,7 @@ def main():
 
     print(f"Collecting all stanzas from {args.input_file}...")
 
-    all_prompts = []
+    all_stanzas = []
     all_ids = []
     all_metadatas = []
 
@@ -91,9 +84,7 @@ def main():
             for j, stanza in enumerate(stanzas):
                 chunk_id = f"{track_id}_stanza_{j}"
 
-                lyric_prompt = f"Represent the following song lyrics for retrieving matching visual scenes or videos: {stanza}"
-
-                all_prompts.append(lyric_prompt)
+                all_stanzas.append(stanza)
                 all_ids.append(chunk_id)
                 all_metadatas.append(
                     {
@@ -108,19 +99,22 @@ def main():
             print(f"Error processing track {i}: {e}")
             continue
 
-    total_chunks = len(all_prompts)
+    total_chunks = len(all_stanzas)
     print(f"Total stanzas collected: {total_chunks}")
 
     print(f"Embedding and inserting in batches of {args.batch_size}...")
 
     # Second pass: iterate with user-specified batch_size
     for i in tqdm(range(0, total_chunks, args.batch_size), desc="Embedding batches"):
-        batch_prompts = all_prompts[i : i + args.batch_size]
+        batch_stanzas = all_stanzas[i : i + args.batch_size]
         batch_ids = all_ids[i : i + args.batch_size]
         batch_metadatas = all_metadatas[i : i + args.batch_size]
 
-        embeddings = model.encode(
-            batch_prompts, batch_size=args.batch_size, show_progress_bar=False
+        embeddings = encode_documents(
+            model,
+            batch_stanzas,
+            batch_size=args.batch_size,
+            show_progress_bar=False,
         ).tolist()
 
         collection.add(

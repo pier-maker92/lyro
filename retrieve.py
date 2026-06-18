@@ -1,75 +1,23 @@
 import argparse
 import chromadb
-import torch
-from sentence_transformers import SentenceTransformer
 import av
 from PIL import Image
-import numpy as np
 
-from moods import MOODS, get_query_prompt
+from embedding import encode_visual_query, get_device, load_model
+from moods import MOODS
 from mxm import MusixmatchClient
 
 
-def load_video_frames(video_path, fps=None, max_frames=8, target_height=720):
+def load_first_video_frame(video_path, target_height=720):
     container = av.open(video_path)
-    frames = []
-
-    if fps is not None:
-        interval = 1.0 / fps
-        next_target_time = 0.0
-        container.seek(0)
-        for frame in container.decode(video=0):
-            t = frame.time
-            if t is None:
-                continue
-            if t >= next_target_time:
-                img = frame.to_image()
-                w, h = img.size
-                if h > target_height:
-                    new_w = int((target_height / h) * w)
-                    img = img.resize((new_w, target_height), Image.Resampling.LANCZOS)
-                frames.append(img)
-                next_target_time += interval
-    else:
-        # Attempt to sample uniformly across the video
-        try:
-            total_frames = container.streams.video[0].frames
-        except Exception:
-            total_frames = 0
-
-        if total_frames > 0:
-            indices = set(
-                np.linspace(
-                    0, total_frames - 1, min(max_frames, total_frames), dtype=int
-                )
-            )
-        else:
-            indices = None
-
-        container.seek(0)
-        for i, frame in enumerate(container.decode(video=0)):
-            if indices is not None:
-                if i in indices:
-                    img = frame.to_image()
-                    w, h = img.size
-                    if h > target_height:
-                        new_w = int((target_height / h) * w)
-                        img = img.resize(
-                            (new_w, target_height), Image.Resampling.LANCZOS
-                        )
-                    frames.append(img)
-                if i > max(indices):
-                    break
-            else:
-                img = frame.to_image()
-                w, h = img.size
-                if h > target_height:
-                    new_w = int((target_height / h) * w)
-                    img = img.resize((new_w, target_height), Image.Resampling.LANCZOS)
-                frames.append(img)
-                if len(frames) >= max_frames:
-                    break
-    return frames
+    for frame in container.decode(video=0):
+        img = frame.to_image()
+        w, h = img.size
+        if h > target_height:
+            new_w = int((target_height / h) * w)
+            img = img.resize((new_w, target_height), Image.Resampling.LANCZOS)
+        return img
+    raise ValueError(f"No video frames found in {video_path}")
 
 
 def get_track_id(chunk_id: str, metadata: dict) -> str:
@@ -100,19 +48,13 @@ def main():
         help=f"Thematic mood for lyrics matching ({', '.join(MOODS)})",
     )
     parser.add_argument(
-        "--fps",
-        type=float,
-        default=None,
-        help="Frames per second to sample from the video",
-    )
-    parser.add_argument(
         "--top_k", type=int, default=5, help="Number of results to retrieve"
     )
     args = parser.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    device = get_device()
     print(f"Loading SentenceTransformer model on {device}...")
-    model = SentenceTransformer("Qwen/Qwen3-VL-Embedding-2B", trust_remote_code=True, device=device)
+    model = load_model(device)
 
     print("Embedding query...")
     is_video = args.query_path.lower().endswith(
@@ -120,27 +62,22 @@ def main():
     )
 
     if is_video:
-        print(f"Extracting and downsampling frames from video: {args.query_path}")
-        media_data = load_video_frames(args.query_path, fps=args.fps)
-        media_key = "video"
+        print(f"Extracting first frame from video: {args.query_path}")
+        media_data = load_first_video_frame(args.query_path)
     else:
         media_data = Image.open(args.query_path)
         w, h = media_data.size
         if h > 720:
             new_w = int((720 / h) * w)
             media_data = media_data.resize((new_w, 720), Image.Resampling.LANCZOS)
-        media_key = "image"
 
-    system_prompt = get_query_prompt(args.mood)
     user_text = "Match these visuals to song lyrics:"
-
     if args.mood:
         print(f"Using mood: {args.mood}")
 
-    query_embedding = model.encode(
-        [{media_key: media_data, "text": user_text}],
-        prompt=system_prompt,
-    )[0].tolist()
+    query_embedding = encode_visual_query(
+        model, media_data, user_text=user_text, mood=args.mood
+    ).tolist()
 
     print("Connecting to ChromaDB...")
     client = chromadb.PersistentClient(path="./lyrics_catalog_db")

@@ -1,6 +1,6 @@
 # Lyra 🎶📸
 
-Lyra is a multimodal retrieval system designed to find the perfect song lyrics that match the visual content of a video or image. By leveraging **Qwen3-VL-Embedding-2B** (via `SentenceTransformer`) and **ChromaDB**, Lyra bridges the gap between visual scenes and lyrical context.
+Lyra is a multimodal retrieval system designed to find the perfect song lyrics that match the visual content of a video or image. By leveraging **llama-nemotron-embed-vl-1b-v2** (via `SentenceTransformer`) and **ChromaDB**, Lyra bridges the gap between visual scenes and lyrical context.
 
 ## 🚀 Features
 
@@ -44,7 +44,7 @@ python retrieve.py path/to/image.jpg --mood "love" --top_k 10
 
 ## ⚙️ How it Works
 
-1. **Embedding (`embed_lyrics.py`):** Parses the lyrics dataset, splits songs into stanzas, wraps them in a specific retrieval prompt, and encodes them using the `Qwen3-VL-Embedding-2B` model. The resulting vectors are stored persistently in ChromaDB.
+1. **Embedding (`embed_lyrics.py`):** Parses the lyrics dataset, splits songs into stanzas, wraps them in a specific retrieval prompt, and encodes them using the `nvidia/llama-nemotron-embed-vl-1b-v2` model. The resulting vectors are stored persistently in ChromaDB.
 2. **Retrieval (`retrieve.py`):** 
     - Uses `PyAV` to accurately decode and sample frames from a video file at the requested FPS (or loads a single image).
     - Downsamples frames to a standard 720p height to optimize memory usage.
