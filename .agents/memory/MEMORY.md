@@ -1,0 +1,1 @@
+- [Visual Lyrics architecture](visual-lyrics.md) — Expo reels app + Express proxy + standalone Python lyrics-engine; production deploy caveat for the Python service.

@@ -5,21 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-export interface AnalyzeRequest {
-  /** Base64 data URL of the image to analyze */
-  imageDataUrl: string;
-}
-
-export interface LyricMatch {
-  lyric: string;
-  artist: string;
-  track: string;
-  distance: number;
-}
+import type { LyricMatch } from './lyricMatch';
 
 export interface AnalyzeResponse {
   love: LyricMatch[];
@@ -28,4 +14,3 @@ export interface AnalyzeResponse {
   chill: LyricMatch[];
   party: LyricMatch[];
 }
-

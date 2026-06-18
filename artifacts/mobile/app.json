@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": false
@@ -28,7 +28,15 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Visual Lyrics usa le tue foto e i tuoi video per trovare i testi musicali perfetti.",
+          "cameraPermission": "Visual Lyrics usa la fotocamera per scattare la foto da abbinare ai testi."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

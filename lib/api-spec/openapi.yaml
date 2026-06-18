@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: lyrics
+    description: Visual-to-lyrics retrieval
 paths:
   /healthz:
     get:
@@ -24,6 +26,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /analyze:
+    post:
+      operationId: analyzeVisual
+      tags: [lyrics]
+      summary: Match lyrics to a visual
+      description: Embeds the image per mood and returns top unique lyric matches for each mood.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+      responses:
+        "200":
+          description: Matches grouped by mood
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +54,57 @@ components:
           type: string
       required:
         - status
+    AnalyzeRequest:
+      type: object
+      properties:
+        imageDataUrl:
+          type: string
+          description: Base64 data URL of the image to analyze
+      required:
+        - imageDataUrl
+    LyricMatch:
+      type: object
+      properties:
+        lyric:
+          type: string
+        artist:
+          type: string
+        track:
+          type: string
+        distance:
+          type: number
+      required:
+        - lyric
+        - artist
+        - track
+        - distance
+    AnalyzeResponse:
+      type: object
+      properties:
+        love:
+          type: array
+          items:
+            $ref: "#/components/schemas/LyricMatch"
+        adventure:
+          type: array
+          items:
+            $ref: "#/components/schemas/LyricMatch"
+        funny:
+          type: array
+          items:
+            $ref: "#/components/schemas/LyricMatch"
+        chill:
+          type: array
+          items:
+            $ref: "#/components/schemas/LyricMatch"
+        party:
+          type: array
+          items:
+            $ref: "#/components/schemas/LyricMatch"
+      required:
+        - love
+        - adventure
+        - funny
+        - chill
+        - party
 

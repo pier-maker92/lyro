@@ -30,11 +30,25 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+**Visual Lyrics** — a TikTok/Reels-style mobile app. The user picks a photo or video; the
+app analyzes the visual and returns matching song lyrics grouped into 5 moods
+(Amore / Avventura / Divertente / Relax / Festa). In the full-screen player, swipe
+left/right to change mood and up/down to move between matches.
+
+- Frontend: `artifacts/mobile` (Expo). Single screen `app/index.tsx` (home -> loading -> player).
+- Backend proxy: `artifacts/api-server` `/api/analyze`.
+- Engine: `services/lyrics-engine` (Python FastAPI + ChromaDB + OpenRouter embeddings), port 8000.
+
+## Architecture decisions
+
+- The lyrics engine is a **standalone Python workflow**, not an artifact. It must be wired
+  into production before deploying the backend, or `/api/analyze` breaks. See `.agents/memory/visual-lyrics.md`.
+- Client sends visuals as resized JPEG data URLs (height 720) to keep payloads small; api-server json limit is 25mb.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- User communicates in **Italian** — respond in Italian.
+- **No emojis** in the UI.
 
 ## Gotchas
 
