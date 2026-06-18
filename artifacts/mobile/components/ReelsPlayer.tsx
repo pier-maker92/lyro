@@ -7,15 +7,13 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  GestureResponderEvent,
-  PanResponder,
-  PanResponderGestureState,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MOOD_META, MOODS } from "@/constants/moods";
@@ -118,31 +116,27 @@ export function ReelsPlayer({ media, results, onReset }: Props) {
       }
       animateLyric(dir > 0 ? 26 : -26);
     },
-    [animateLyric, matchesByMood],
+    [animateLyric],
   );
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (
-        _e: GestureResponderEvent,
-        g: PanResponderGestureState,
-      ) => Math.abs(g.dx) > 14 || Math.abs(g.dy) > 14,
-      onPanResponderRelease: (
-        _e: GestureResponderEvent,
-        g: PanResponderGestureState,
-      ) => {
-        const absX = Math.abs(g.dx);
-        const absY = Math.abs(g.dy);
-        const TH = 45;
-        if (absX < TH && absY < TH) return;
-        if (absX > absY) {
-          changeMood(g.dx < 0 ? 1 : -1);
-        } else {
-          changeMatch(g.dy < 0 ? 1 : -1);
-        }
-      },
-    }),
-  ).current;
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .minDistance(14)
+        .onEnd((e) => {
+          const absX = Math.abs(e.translationX);
+          const absY = Math.abs(e.translationY);
+          const TH = 45;
+          if (absX < TH && absY < TH) return;
+          if (absX > absY) {
+            changeMood(e.translationX < 0 ? 1 : -1);
+          } else {
+            changeMatch(e.translationY < 0 ? 1 : -1);
+          }
+        }),
+    [changeMood, changeMatch],
+  );
 
   const currentMood = MOODS[moodIndex];
   const meta = MOOD_META[currentMood];
@@ -150,7 +144,8 @@ export function ReelsPlayer({ media, results, onReset }: Props) {
   const currentMatch: LyricMatch | undefined = currentList[matchIndex];
 
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
+    <GestureDetector gesture={swipeGesture}>
+      <View style={styles.container}>
       <StatusBar style="light" />
 
       {media.type === "video" ? (
@@ -270,7 +265,8 @@ export function ReelsPlayer({ media, results, onReset }: Props) {
           </View>
         </View>
       </View>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 
