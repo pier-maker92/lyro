@@ -28,3 +28,26 @@ there is no pure-image embedding to reuse across moods — averaging must happen
 per mood. There is intentionally **no `imageDataUrl` backward-compat fallback**;
 the canonical field is `frames` and keeping a second path made the OpenAPI
 contract inconsistent with the code.
+
+## Web platform frame extraction
+
+`expo-video-thumbnails` is **native-only** — it silently does nothing on web. On
+web (`Platform.OS === "web"`) frames are extracted with an offscreen HTML
+`<video>` + `<canvas>`: load metadata, seek to evenly spaced timestamps, and
+`canvas.toDataURL("image/jpeg", 0.7)` at height 720. The element is never
+appended to the DOM.
+
+**Detection trap:** on web `expo-image-picker` frequently does **not** set
+`asset.type` to `"video"`. Relying on `asset.type` alone misroutes a picked
+video into the image path, where `ImageManipulator` hangs forever on a video
+blob — the UI just sits on the home screen with no error (RN-Web `Alert.alert`
+is effectively a no-op, so failures are invisible). Detect video via
+`asset.type` **OR** `asset.mimeType` (`video/*`) **OR** filename/uri extension.
+
+**Why:** "metto i video ma non funziona" was this exact silent hang on the web
+preview. The backend was always fine.
+
+**Testing caveat:** the Playwright e2e harness cannot reliably resolve
+`expo-image-picker`'s web file dialog (its dynamically-created `<input>` change
+event often never fires, so `launchImageLibraryAsync` hangs). Verify the backend
+path directly instead (ffmpeg-extract frames → base64 → POST /api/analyze).
