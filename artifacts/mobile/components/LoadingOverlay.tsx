@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+import { VideoBackground } from "@/components/VideoBackground";
 import type { PickedMedia } from "@/lib/media";
 
 interface Props {
@@ -14,7 +15,9 @@ export function LoadingOverlay({ media }: Props) {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      {media?.type === "image" ? (
+      {media?.type === "video" ? (
+        <VideoBackground uri={media.uri} />
+      ) : media?.type === "image" ? (
         <Image
           source={{ uri: media.uri }}
           style={StyleSheet.absoluteFill}

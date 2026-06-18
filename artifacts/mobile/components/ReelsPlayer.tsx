@@ -3,7 +3,6 @@ import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import { useVideoPlayer, VideoView } from "expo-video";
 import React, {
   useCallback,
   useEffect,
@@ -24,6 +23,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MOOD_META, MOODS } from "@/constants/moods";
+import { VideoBackground } from "@/components/VideoBackground";
 import type { PickedMedia } from "@/lib/media";
 import type { AnalyzeResponse, LyricMatch } from "@workspace/api-client-react";
 
@@ -31,22 +31,6 @@ interface Props {
   media: PickedMedia;
   results: AnalyzeResponse;
   onReset: () => void;
-}
-
-function VideoBackground({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
-  });
-  return (
-    <VideoView
-      player={player}
-      style={StyleSheet.absoluteFill}
-      contentFit="cover"
-      nativeControls={false}
-    />
-  );
 }
 
 function withAlpha(hex: string, alpha: number) {
