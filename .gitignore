@@ -1,5 +1,17 @@
-.env
-.venv/
-lyrics_catalog_db/
+# Python
 __pycache__/
-queries_720p/
+*.py[cod]
+*$py.class
+
+# Escludi tutti i file e cartelle che iniziano con il punto
+.*
+!.gitignore
+
+# File specifici
+test_openrouter.py
+
+# Databases
+lyrics_catalog_db/
+
+# Datasets / JSON Lines
+*.jsonl
