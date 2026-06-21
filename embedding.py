@@ -16,9 +16,13 @@ def get_device() -> str:
     return "cpu"
 
 
-def load_model(device: str | None = None) -> SentenceTransformer:
+def load_model(device: str | None = None, model_name: str | None = None) -> SentenceTransformer:
     device = device or get_device()
-    return SentenceTransformer(MODEL_NAME, trust_remote_code=True, device=device)
+    model_name = model_name or MODEL_NAME
+    model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
+    if "clip" in model_name.lower():
+        model.max_seq_length = 77
+    return model
 
 
 def encode_documents(
@@ -28,7 +32,13 @@ def encode_documents(
     show_progress_bar: bool = False,
 ) -> np.ndarray:
     inputs = [format_document(text) for text in texts]
-    return model.encode_document(
+    if hasattr(model, "encode_document"):
+        return model.encode_document(
+            inputs,
+            batch_size=batch_size,
+            show_progress_bar=show_progress_bar,
+        )
+    return model.encode(
         inputs,
         batch_size=batch_size,
         show_progress_bar=show_progress_bar,

@@ -115,16 +115,23 @@ def main():
         default="lyrics_dataset.jsonl",
         help="Path to the JSON/JSONL dataset file",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="nvidia/llama-nemotron-embed-vl-1b-v2",
+        help="SentenceTransformer model name to use for embeddings (e.g. wkcn/TinyCLIP-ViT-8M-16-Text-3M-YFCC15M)",
+    )
     args = parser.parse_args()
 
     device = get_device()
-    print(f"Loading SentenceTransformer model on {device}...")
-    model = load_model(device)
+    print(f"Loading SentenceTransformer model {args.model} on {device}...")
+    model = load_model(device, model_name=args.model)
 
     mood_anchors = embed_mood_anchors(model)
 
     print("Initializing ChromaDB...")
-    client = chromadb.PersistentClient(path="./lyrics_catalog_db")
+    db_path = "./TinyCLAPdb" if "clip" in args.model.lower() else "./lyrics_catalog_db"
+    client = chromadb.PersistentClient(path=db_path)
     collection = client.get_or_create_collection(
         name="song_lyrics_min", metadata={"hnsw:space": "cosine"}
     )
