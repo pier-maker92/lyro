@@ -163,15 +163,19 @@ async def analyze(req: AnalyzeRequest) -> dict[str, list[LyricMatch]]:
     distances = (result.get("distances") or [[]])[0]
     metadatas = (result.get("metadatas") or [[]])[0]
 
-    # Keep ALL candidates in visual-distance order — "best" is simply the
-    # top-K results (no dedup). Moods are buckets over the same candidates.
+    # Candidates come back in ascending visual-distance order, so the first time
+    # we see a track_id is its closest stanza. Dedup to ONE stanza per track —
+    # the response must never show two stanzas from the same track. "best" is then
+    # the unique tracks in distance order; moods are buckets over the same picks.
     best_picks: list[tuple[str, int, float, str]] = []
     per_mood_picks: dict[str, list[tuple[str, int, float, str]]] = {}
-    needed_tracks: set[str] = set()
+    seen_tracks: set[str] = set()
 
     for embedding_id, dist, meta in zip(ids, distances, metadatas):
         track_id, stanza_index = _parse_embedding_id(str(embedding_id))
-        needed_tracks.add(track_id)
+        if track_id in seen_tracks:
+            continue
+        seen_tracks.add(track_id)
 
         mood = str(meta.get("mood") or "Unknown") if meta else "Unknown"
 
@@ -179,7 +183,7 @@ async def analyze(req: AnalyzeRequest) -> dict[str, list[LyricMatch]]:
         best_picks.append(pick)
         per_mood_picks.setdefault(mood, []).append(pick)
 
-    needed = list(needed_tracks)
+    needed = list(seen_tracks)
 
     # Resolve lyrics/artist/title from Musixmatch. A single unavailable track
     # must not sink the whole response, so failures are dropped per-track.
