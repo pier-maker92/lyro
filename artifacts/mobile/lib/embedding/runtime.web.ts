@@ -45,11 +45,11 @@ function loadOrt(): Promise<Ort> {
   return ortPromise;
 }
 
-function getSession(
-  ort: Ort,
-): Promise<import("onnxruntime-web").InferenceSession> {
-  if (!sessionPromise) {
-    sessionPromise = (async () => {
+let modelBytesPromise: Promise<Uint8Array> | null = null;
+
+function getModelBytes(): Promise<Uint8Array> {
+  if (!modelBytesPromise) {
+    modelBytesPromise = (async () => {
       const asset = Asset.fromModule(modelAsset);
       await asset.downloadAsync();
       const uri = asset.localUri ?? asset.uri;
@@ -57,13 +57,19 @@ function getSession(
       if (!res.ok) {
         throw new Error(`failed to fetch ONNX model: ${res.status} ${res.statusText}`);
       }
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      return ort.InferenceSession.create(bytes, {
-        executionProviders: ["wasm"],
-      });
+      return new Uint8Array(await res.arrayBuffer());
     })();
   }
-  return sessionPromise;
+  return modelBytesPromise;
+}
+
+async function createSession(
+  ort: Ort,
+): Promise<import("onnxruntime-web").InferenceSession> {
+  const bytes = await getModelBytes();
+  return ort.InferenceSession.create(bytes, {
+    executionProviders: ["wasm"],
+  });
 }
 
 async function decode(dataUrl: string): Promise<Rgba> {
@@ -95,18 +101,28 @@ async function decode(dataUrl: string): Promise<Rgba> {
 
 export async function embedImages(dataUrls: string[]): Promise<Float32Array[]> {
   const ort = await loadOrt();
-  const session = await getSession(ort);
-  const out: Float32Array[] = [];
-  for (const url of dataUrls) {
-    const rgba = await decode(url);
-    const input = new ort.Tensor("float32", preprocessToTensor(rgba), [
-      1,
-      3,
-      CLIP_SIZE,
-      CLIP_SIZE,
-    ]);
-    const result = await session.run({ pixel_values: input });
-    out.push(Float32Array.from(result.image_embeds.data as Float32Array));
+  const session = await createSession(ort);
+  try {
+    const out: Float32Array[] = [];
+    for (const url of dataUrls) {
+      const rgba = await decode(url);
+      const input = new ort.Tensor("float32", preprocessToTensor(rgba), [
+        1,
+        3,
+        CLIP_SIZE,
+        CLIP_SIZE,
+      ]);
+      const result = await session.run({ pixel_values: input });
+      out.push(Float32Array.from(result.image_embeds.data as Float32Array));
+    }
+    return out;
+  } finally {
+    try {
+      if (typeof session.release === "function") {
+        session.release();
+      }
+    } catch (e) {
+      // Ignore release errors
+    }
   }
-  return out;
 }
