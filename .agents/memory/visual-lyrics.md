@@ -51,7 +51,13 @@ re-lock and redeploy.
 torch-family wheels — mapping `sentence-transformers`/`transformers` there makes uv unable to
 find recent versions ("only <X available"). Keep ONLY `torch` mapped to pytorch-cpu; let the
 rest resolve from PyPI. (2) `requires-python` was `>=3.11` which forced resolution for 3.14+
-where sentence-transformers 5.6.0 has no wheel; capped to `>=3.11,<3.14` (runtime is 3.11).
+where sentence-transformers 5.6.0 has no wheel; capped to `>=3.11,<3.13` (runtime is 3.11).
+**The cap must be `<3.13`, not `<3.14`:** the deploy build runs `uv sync` which validates the
+FULL requires-python range (not just the active 3.11). torch 2.12.1+cpu has no cp313 wheel on the
+pytorch-cpu index, so the 3.13 split makes sentence-transformers 5.6.0 unsatisfiable and the
+publish build fails with "No solution found ... python_full_version == '3.13.*'". `uv lock` can
+succeed locally while the build's `uv sync` still fails on an excluded-but-in-range split — always
+re-run `uv sync` (not just `uv lock`) locally to catch this before redeploying.
 
 ## Embedding/retrieval note
 The image query is PURELY visual (no text prompt; video = average of frame vectors).
