@@ -1,7 +1,11 @@
 fastapi
 uvicorn[standard]
-chromadb
+# SECURITY: chromadb 1.5.9 has GHSA-f4j7-r4q5-qw2c (Critical). No patched release
+# exists on PyPI as of 2026-06-21 — 1.5.9 is the latest available version.
+# Pin explicitly so any future upgrade can be audited. Re-evaluate when 1.6.x ships.
+chromadb==1.5.9
 httpx
+pydantic-settings>=2.14.2
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.12.1+cpu
 sentence-transformers
