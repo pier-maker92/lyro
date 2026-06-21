@@ -124,7 +124,7 @@ export const getAnalyzeVisualUrl = () => {
 }
 
 /**
- * Embeds the visual (image, or the averaged frames of a video) with a single mood-agnostic query, retrieves the top lyric matches from the catalog, and returns them as `best` (pure visual-distance order) plus a dynamic bucket per mood found in the results (mood is stored in catalog metadata).
+ * Takes a precomputed, mood-agnostic visual query embedding (TinyCLIP image tower, computed on-device by the client), retrieves the top lyric matches from the catalog, and returns them as `best` (pure visual-distance order) plus a dynamic bucket per mood found in the results (mood is stored in catalog metadata).
  * @summary Match lyrics to a visual
  */
 export const analyzeVisual = async (analyzeRequest: AnalyzeRequest, options?: RequestInit): Promise<AnalyzeResponse> => {

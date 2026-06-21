@@ -1,15 +1,17 @@
 """Visual-to-Lyrics retrieval engine.
 
-FastAPI service that embeds an uploaded image (mood-agnostic, purely visual) with
-a local TinyCLIP model, then queries a local ChromaDB catalog of song lyrics for
-the top candidates. The mood is precomputed and stored in each stanza's metadata,
-so the response exposes a ``best`` ordering (pure visual distance) plus a dynamic
+FastAPI service that searches a local ChromaDB catalog of song lyrics using a
+**precomputed** visual query embedding supplied by the client. The client (Expo
+app) runs TinyCLIP on-device and sends the resulting 512-dim vector; this service
+holds NO ML model — it only queries Chroma, enriches matches via Musixmatch, and
+groups them by the mood stored in each stanza's catalog metadata.
+
+The response exposes a ``best`` ordering (pure visual distance) plus a dynamic
 bucket per mood that was actually retrieved.
 """
 
 import asyncio
 import os
-from contextlib import asynccontextmanager
 
 import chromadb
 import httpx
@@ -17,14 +19,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from embeddings import embed_frames, get_model
 from musixmatch import TrackData, fetch_track
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "TinyCLAPdb")
 COLLECTION_NAME = "song_lyrics_min"
 # Number of candidates pulled from Chroma
 CANDIDATE_K = 100
-MAX_FRAMES = 8
+# The catalog (and the client's TinyCLIP image tower) embed into this dimension.
+EMBED_DIM = 512
 
 # Catalog filters: English, clean (non-explicit) lyrics, 25–150 characters.
 LENGTH_BINS = ["25-50", "50-75", "75-100", "100-125", "125-150"]
@@ -37,14 +39,7 @@ WHERE_FILTER = {
 }
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Warm the TinyCLIP model so the first request isn't slow.
-    await asyncio.to_thread(get_model)
-    yield
-
-
-app = FastAPI(title="Lyrics Engine", lifespan=lifespan)
+app = FastAPI(title="Lyrics Engine")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -69,7 +64,9 @@ def _collection():
 
 
 class AnalyzeRequest(BaseModel):
-    frames: list[str]
+    # Precomputed, mood-agnostic visual query vector (TinyCLIP image tower, 512-dim,
+    # NOT L2-normalized). For a video the client averages the per-frame vectors.
+    embedding: list[float]
 
 
 class LyricMatch(BaseModel):
@@ -127,31 +124,27 @@ def _stanza_at(lyrics: str, index: int) -> str:
 
 @app.post("/analyze")
 async def analyze(req: AnalyzeRequest) -> dict[str, list[LyricMatch]]:
-    frames = [f for f in req.frames if isinstance(f, str) and f.startswith("data:")]
-    if not frames:
+    query_vector = req.embedding
+    if not query_vector:
+        raise HTTPException(status_code=400, detail="embedding must not be empty")
+    if len(query_vector) != EMBED_DIM:
         raise HTTPException(
-            status_code=400, detail="frames must contain at least one data URL"
+            status_code=400,
+            detail=(
+                f"embedding must have {EMBED_DIM} dimensions, "
+                f"got {len(query_vector)}"
+            ),
         )
-    if len(frames) > MAX_FRAMES:
-        # Sample evenly across the clip (including first and last frame) so we
-        # keep ~1fps coverage without exploding the number of embedding calls.
-        last = len(frames) - 1
-        frames = [
-            frames[round(i * last / (MAX_FRAMES - 1))] for i in range(MAX_FRAMES)
-        ]
+    if not all(isinstance(v, (int, float)) for v in query_vector):
+        raise HTTPException(
+            status_code=400, detail="embedding must contain only numbers"
+        )
+    query_vector = [float(v) for v in query_vector]
 
     collection = _collection()
 
-    # One purely-visual query vector, embedded locally with TinyCLIP. The CPU
-    # work runs off the event loop so concurrent requests aren't blocked.
-    try:
-        query_vector = await asyncio.to_thread(embed_frames, frames)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Could not decode frames: {exc}"
-        ) from exc
-
-    # Pull the top candidates: English, clean, 25–150 char lyrics.
+    # Pull the top candidates: English, clean, 25–150 char lyrics. The query vector
+    # is precomputed by the client (TinyCLIP on-device) — no model runs here.
     result = collection.query(
         query_embeddings=[query_vector],
         n_results=CANDIDATE_K,

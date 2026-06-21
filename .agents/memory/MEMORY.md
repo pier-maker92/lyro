@@ -1,1 +1,2 @@
 - [react-native-worklets babel/generator](babel-worklets-pnpm.md) — pinning @babel/core via pnpm override breaks Expo Metro bundling; fix by declaring @babel/generator on react-native-worklets via packageExtensions.
+- [onnxruntime on Expo + CLIP parity](onnxruntime-expo-web.md) — onnxruntime-web can't be Metro-bundled (dynamic worker import); load UMD from CDN on web. Pure-JS area-average CLIP preprocess hits cosine >= 0.998 vs golden.

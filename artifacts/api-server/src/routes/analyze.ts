@@ -5,12 +5,16 @@ const router: IRouter = Router();
 const ENGINE_URL = process.env.LYRICS_ENGINE_URL ?? "http://127.0.0.1:8000";
 
 router.post("/analyze", async (req, res) => {
-  const rawFrames = Array.isArray(req.body?.frames) ? req.body.frames : [];
-  const frames = rawFrames.filter(
-    (f: unknown): f is string => typeof f === "string" && f.startsWith("data:"),
+  const rawEmbedding = Array.isArray(req.body?.embedding)
+    ? req.body.embedding
+    : [];
+  const embedding = rawEmbedding.filter(
+    (v: unknown): v is number => typeof v === "number" && Number.isFinite(v),
   );
-  if (frames.length === 0) {
-    res.status(400).json({ error: "frames must contain at least one data URL" });
+  if (embedding.length === 0 || embedding.length !== rawEmbedding.length) {
+    res
+      .status(400)
+      .json({ error: "embedding must be a non-empty array of numbers" });
     return;
   }
 
@@ -18,7 +22,7 @@ router.post("/analyze", async (req, res) => {
     const upstream = await fetch(`${ENGINE_URL}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frames }),
+      body: JSON.stringify({ embedding }),
     });
 
     const text = await upstream.text();

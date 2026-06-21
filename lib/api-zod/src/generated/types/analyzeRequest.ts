@@ -8,8 +8,8 @@
 
 export interface AnalyzeRequest {
   /**
-     * Ordered list of base64 JPEG data URLs. For an image this is a single frame; for a video, frames sampled at ~1fps. Their embeddings are averaged into one mood-agnostic query vector.
+     * Precomputed mood-agnostic visual query vector (TinyCLIP image tower, 512-dim, NOT L2-normalized), computed on-device by the client. For a video the client averages the per-frame vectors into one vector.
      * @minItems 1
      */
-  frames: string[];
+  embedding: number[];
 }

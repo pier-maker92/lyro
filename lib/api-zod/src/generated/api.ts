@@ -18,14 +18,14 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Embeds the visual (image, or the averaged frames of a video) with a single mood-agnostic query, retrieves the top lyric matches from the catalog, and returns them as `best` (pure visual-distance order) plus a dynamic bucket per mood found in the results (mood is stored in catalog metadata).
+ * Takes a precomputed, mood-agnostic visual query embedding (TinyCLIP image tower, computed on-device by the client), retrieves the top lyric matches from the catalog, and returns them as `best` (pure visual-distance order) plus a dynamic bucket per mood found in the results (mood is stored in catalog metadata).
  * @summary Match lyrics to a visual
  */
 
 
 
 export const AnalyzeVisualBody = zod.object({
-  "frames": zod.array(zod.string()).min(1).describe('Ordered list of base64 JPEG data URLs. For an image this is a single frame; for a video, frames sampled at ~1fps. Their embeddings are averaged into one mood-agnostic query vector.')
+  "embedding": zod.array(zod.number()).min(1).describe('Precomputed mood-agnostic visual query vector (TinyCLIP image tower, 512-dim, NOT L2-normalized), computed on-device by the client. For a video the client averages the per-frame vectors into one vector.')
 })
 
 export const AnalyzeVisualResponse = zod.object({

@@ -2,6 +2,7 @@ import { useAnalyzeVisual } from "@workspace/api-client-react";
 import React, { useState } from "react";
 import { Alert } from "react-native";
 
+import { embedFrames } from "@/lib/embedding";
 import { HomeScreen } from "@/components/HomeScreen";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { ReelsPlayer } from "@/components/ReelsPlayer";
@@ -28,8 +29,19 @@ export default function Index() {
       if (!picked) return;
       setMedia(picked);
       setResults(null);
+      let embedding: number[];
+      try {
+        embedding = await embedFrames(picked.frames);
+      } catch {
+        setMedia(null);
+        Alert.alert(
+          "Errore",
+          "Non sono riuscito ad analizzare il media. Riprova.",
+        );
+        return;
+      }
       analyze.mutate(
-        { data: { frames: picked.frames } },
+        { data: { embedding } },
         {
           onSuccess: (data) => setResults(data),
           onError: () => {
